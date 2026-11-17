@@ -13,10 +13,10 @@
     "apiKeySecret": "GEMINI_API_KEY",
     "pauseSeconds": 10
   },
-  "openai-gpt-5-mini": {
-    "label": "OpenAI gpt-5-mini (paid)",
+  "openai-gpt-5-4-mini": {
+    "label": "OpenAI GPT-5.4 mini (paid)",
     "endpoint": "https://api.openai.com/v1",
-    "model": "gpt-5-mini",
+    "model": "gpt-5.4-mini",
     "apiKeySecret": "OPENAI_API_KEY",
     "pauseSeconds": 0
   },

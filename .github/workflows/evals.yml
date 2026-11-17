@@ -13,7 +13,7 @@ on:
         options:
           - gemini-flash
           - gemini-flash-lite
-          - openai-gpt-5-mini
+          - openai-gpt-5-4-mini
           - claude-haiku
           - all
       runs:

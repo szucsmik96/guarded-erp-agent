@@ -17,7 +17,7 @@ public static class Hosting
     public static readonly IReadOnlyDictionary<string, string?> Defaults = new Dictionary<string, string?>
     {
         ["Llm:Endpoint"] = "https://api.openai.com/v1",
-        ["Llm:Model"] = "gpt-5-mini",
+        ["Llm:Model"] = "gpt-5.4-mini",
         ["Llm:MaxRetries"] = "6",
         ["Llm:TimeoutSeconds"] = "180",
         ["Mcp:ServerProject"] = DefaultServerProject,
