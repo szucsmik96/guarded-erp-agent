@@ -69,6 +69,14 @@ foreach (var scenario in scenarios)
     {
         Console.WriteLine($"       {f}");
     }
+
+    // In GitHub Actions, also emit annotations: they show on the run page and are readable via the public API.
+    if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+    {
+        var detail = failures.Count == 0 ? "" : " | " + string.Join(" | ", failures.Take(3));
+        var level = passed == runs ? "notice" : "error";
+        Console.WriteLine($"::{level} title=eval {scenario.Id}::{passed}/{runs} passed{Escape(detail)}");
+    }
 }
 
 var report = WriteReport(model, runs, results);
@@ -105,6 +113,9 @@ async Task<List<string>> RunOnceAsync(Scenario scenario)
         TryDelete(dbPath);
     }
 }
+
+static string Escape(string text) =>
+    text.Replace("%", "%25").Replace("\r", "%0D").Replace("\n", "%0A");
 
 static int CountOrders(string dbPath)
 {
