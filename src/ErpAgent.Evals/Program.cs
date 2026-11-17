@@ -111,7 +111,7 @@ async Task<(Outcome Outcome, List<string> Messages)> RunOnceAsync(Scenario scena
     }
     catch (Exception ex)
     {
-        return (Outcome.Fail, new List<string> { $"crashed: {ex.GetType().Name}: {ex.Message}" });
+        return (Outcome.Fail, new List<string> { $"crashed: {ex.GetType().Name}: {ex.Message.Split('\n')[0]}{ResponseBody(ex)}" });
     }
     finally
     {
@@ -129,8 +129,20 @@ static bool IsProviderError(Exception ex) => ex switch
 };
 
 static string Describe(Exception ex) => ex is ClientResultException cre
-    ? $"HTTP {cre.Status}"
+    ? $"HTTP {cre.Status}{ResponseBody(ex)}"
     : $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
+
+// The provider's error body usually says exactly what it disliked.
+static string ResponseBody(Exception ex)
+{
+    var body = (ex as ClientResultException)?.GetRawResponse()?.Content?.ToString();
+    if (string.IsNullOrWhiteSpace(body))
+    {
+        return "";
+    }
+    body = body.ReplaceLineEndings(" ");
+    return " | provider said: " + (body.Length > 600 ? body[..600] + "…" : body);
+}
 
 static void Print(ScenarioResult r, int runs)
 {

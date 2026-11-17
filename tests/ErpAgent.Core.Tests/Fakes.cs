@@ -10,10 +10,13 @@ internal sealed class ScriptedChatClient(params ChatResponse[] script) : IChatCl
 
     public List<List<ChatMessage>> Requests { get; } = [];
 
+    public ChatOptions? LastOptions { get; private set; }
+
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         Requests.Add(messages.ToList());
+        LastOptions = options;
         var next = _script.Count > 0 ? _script.Dequeue() : Say("done");
         return Task.FromResult(next);
     }

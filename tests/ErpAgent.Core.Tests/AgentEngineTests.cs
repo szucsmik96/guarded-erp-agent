@@ -103,6 +103,23 @@ public sealed class AgentEngineTests
     }
 
     [Fact]
+    public async Task The_model_never_sees_the_requestId_parameter()
+    {
+        var writer = AIFunctionFactory.Create((string cardCode, string? requestId) => "ok", "create_order");
+        var chat = new ScriptedChatClient(Say("done"));
+        var state = AgentRunState.Create("system");
+        state.AddUserMessage("go");
+
+        await new AgentEngine(chat, [writer], _ => false).AdvanceAsync(state);
+
+        var shown = Assert.IsAssignableFrom<AIFunction>(Assert.Single(chat.LastOptions!.Tools!));
+        var properties = shown.JsonSchema.GetProperty("properties");
+        Assert.True(properties.TryGetProperty("cardCode", out _));
+        Assert.False(properties.TryGetProperty("requestId", out _));
+        Assert.Equal("create_order", shown.Name);
+    }
+
+    [Fact]
     public void Deciding_outside_an_approval_wait_is_rejected()
     {
         var state = AgentRunState.Create("system");

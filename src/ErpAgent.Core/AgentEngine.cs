@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.AI;
@@ -162,7 +163,12 @@ public sealed class AgentEngine
     {
         _chat = chat;
         _byName = tools.ToDictionary(t => t.Name);
-        _options = new ChatOptions { Tools = [.. tools] };
+        // The model sees requestId-free schemas: the id is infrastructure, filled in by the engine, and some
+        // providers reject the nullable/default shape such optional parameters produce.
+        _options = new ChatOptions
+        {
+            Tools = [.. tools.Select(t => AcceptsRequestId(t) ? new ModelFacingFunction(t, WithoutRequestId(t.JsonSchema)) : t)],
+        };
         _requiresApproval = requiresApproval;
         _maxSteps = maxSteps;
         _trace = trace;
@@ -275,6 +281,28 @@ public sealed class AgentEngine
             return (new FunctionResultContent(call.CallId, $"Error while running {tool.Name}: {ex.Message}"),
                     new ToolCallRecord(tool.Name, call.Arguments, call.NeedsApproval, GuardedAgent.Decisions.Error, ex.Message));
         }
+    }
+
+    private static JsonElement WithoutRequestId(JsonElement schema)
+    {
+        var node = JsonNode.Parse(schema.GetRawText())!.AsObject();
+        if (node["properties"] is JsonObject properties)
+        {
+            properties.Remove(RequestIdArgument);
+        }
+        if (node["required"] is JsonArray required)
+        {
+            var keep = required.Where(r => r?.GetValue<string>() != RequestIdArgument).Select(r => r?.DeepClone()).ToArray();
+            node["required"] = new JsonArray(keep);
+        }
+        using var doc = JsonDocument.Parse(node.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>Same function, different schema shown to the model. Invocation always goes to the original.</summary>
+    private sealed class ModelFacingFunction(AIFunction inner, JsonElement schema) : DelegatingAIFunction(inner)
+    {
+        public override JsonElement JsonSchema => schema;
     }
 
     private static bool AcceptsRequestId(AIFunction tool) =>
