@@ -12,11 +12,6 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet restore GuardedErp.slnx
-      - name: Report resolved package versions (temporary, for pinning)
-        run: |
-          line=$(for p in src/*/*.csproj tests/*/*.csproj; do dotnet list "$p" package --format json; done \
-            | jq -rs '[.[].projects[].frameworks[]?.topLevelPackages[]? | "\(.id)=\(.resolvedVersion)"] | unique | join(" ")')
-          echo "::notice title=resolved::$line"
       - run: dotnet build GuardedErp.slnx --no-restore -c Release
       - run: dotnet test GuardedErp.slnx --no-build -c Release
 

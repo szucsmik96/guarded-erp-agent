@@ -1,7 +1,7 @@
 # Build context: repo root.  docker build -f src/ErpMcp.Server/Dockerfile -t erp-mcp .
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY Directory.Build.props ./
+COPY Directory.Build.props Directory.Packages.props ./
 COPY src/ErpMcp.Server/ErpMcp.Server.csproj src/ErpMcp.Server/
 RUN dotnet restore src/ErpMcp.Server/ErpMcp.Server.csproj
 COPY src/ErpMcp.Server/ src/ErpMcp.Server/
