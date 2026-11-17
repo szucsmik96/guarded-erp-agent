@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using ErpAgent.Core;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Client;
@@ -59,7 +60,10 @@ public static class ApiJson
 
     private static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+        };
         options.Converters.Add(new JsonStringEnumConverter());
         options.MakeReadOnly();
         return options;
