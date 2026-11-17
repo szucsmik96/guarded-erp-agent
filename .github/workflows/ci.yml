@@ -12,13 +12,23 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet restore GuardedErp.slnx
-      - name: Report resolved package versions (temporary, for pinning)
-        run: |
-          line=$(for p in src/*/*.csproj tests/*/*.csproj; do dotnet list "$p" package --format json; done \
-            | jq -rs '[.[].projects[].frameworks[]?.topLevelPackages[]? | "\(.id)=\(.resolvedVersion)"] | unique | join(" ")')
-          echo "::notice title=resolved::$line"
       - run: dotnet build GuardedErp.slnx --no-restore -c Release
-      - run: dotnet test GuardedErp.slnx --no-build -c Release
+      - run: dotnet test GuardedErp.slnx --no-build -c Release --logger "trx" --results-directory TestResults
+      - name: Report failed tests as annotations
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          for path in glob.glob("TestResults/**/*.trx", recursive=True):
+              for r in ET.parse(path).getroot().iterfind(".//t:UnitTestResult", ns):
+                  if r.get("outcome") != "Failed":
+                      continue
+                  msg = r.findtext(".//t:Message", default="", namespaces=ns)
+                  trace = r.findtext(".//t:StackTrace", default="", namespaces=ns)
+                  text = (msg + " || " + " | ".join(trace.strip().splitlines()[:4])).replace("%", "%25").replace("\r", "").replace("\n", " ")
+                  print(f"::error title=test {r.get('testName')}::{text[:1500]}")
+          PY
 
   docker:
     runs-on: ubuntu-latest
