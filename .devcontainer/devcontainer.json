@@ -1,0 +1,19 @@
+{
+  "name": "guarded-erp-agent",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "10.0" },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "dotnet build GuardedErp.slnx && dotnet test GuardedErp.slnx --no-build",
+  "secrets": {
+    "Llm__ApiKey": {
+      "description": "API key for an OpenAI-compatible endpoint, used by the agent and the evals."
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-dotnettools.csdevkit"]
+    }
+  }
+}

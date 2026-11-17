@@ -1,0 +1,37 @@
+name: evals
+
+# Manual only: needs the OPENAI_API_KEY repository secret and costs a few cents per run.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model name
+        default: gpt-5-mini
+      runs:
+        description: Runs per scenario
+        default: "3"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build GuardedErp.slnx
+      - name: Run evals
+        env:
+          Llm__ApiKey: ${{ secrets.OPENAI_API_KEY }}
+          Llm__Model: ${{ inputs.model }}
+          RUNS: ${{ inputs.runs }}
+        run: dotnet run --project src/ErpAgent.Evals --no-build -- --runs "$RUNS"
+      - name: Publish report to the run summary
+        if: always()
+        run: cat evals/results/*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No report written." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: evals/results/
+          if-no-files-found: ignore

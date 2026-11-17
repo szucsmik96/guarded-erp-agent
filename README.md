@@ -123,6 +123,15 @@ on first run, next to the server binary.
 | `Do we have LED desk lamps? Order 5 for Alpine Workspace` | Out of stock. The agent explains and suggests what to do. |
 | Approve nothing: answer `n` and give a reason | The agent stops and asks you how to proceed. The denial is in `agent-audit.jsonl`. |
 
+## Run it in the browser (nothing to install)
+
+- **Codespaces:** on the repo page, choose **Code → Codespaces → Create codespace**. The container comes
+  with .NET 10 and Docker, and builds and tests the project on start. Add a Codespaces secret called
+  `Llm__ApiKey` with your key (**Settings → Codespaces → Secrets** on your account), then run
+  `dotnet run --project src/ErpAgent.Cli` in the terminal.
+- **Evals in GitHub Actions:** add a repository secret `OPENAI_API_KEY`, then go to
+  **Actions → evals → Run workflow**. The report appears on the run's summary page.
+
 ## Run it without installing .NET
 
 Every CI run publishes self-contained, single-file executables for Windows, macOS (Apple Silicon)
