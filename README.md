@@ -165,10 +165,11 @@ on first run, next to the server binary.
   with .NET 10 and Docker, and builds and tests the project on start. Add a Codespaces secret called
   `Llm__ApiKey` with your key (**Settings → Codespaces → Secrets** on your account), then run
   `dotnet run --project src/ErpAgent.Cli` in the terminal.
-- **Evals in GitHub Actions:** add a repository secret `LLM_API_KEY`, then go to
-  **Actions → evals → Run workflow** and pick the endpoint and model. The report appears on the
-  run's summary page. A free Gemini key works:
-  use the endpoint `https://generativelanguage.googleapis.com/v1beta/openai/` and a Gemini Flash model.
+- **Evals in GitHub Actions:** go to **Actions → evals → Run workflow** and pick a model preset from
+  the dropdown, or **all** to compare every model side by side. Presets live in
+  [`evals/models.json`](evals/models.json). Each names the repository secret holding its key:
+  `GEMINI_API_KEY` (free tier available), `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. The report appears
+  on each run's summary page. Locally: `dotnet run --project src/ErpAgent.Evals -- --preset gemini-flash`.
 
 ## Run it without installing .NET
 

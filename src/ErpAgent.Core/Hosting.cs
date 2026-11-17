@@ -26,11 +26,13 @@ public static class Hosting
     };
 
     /// <summary>Defaults, then ./appsettings.Local.json (gitignored), then environment variables (Llm__ApiKey, ...).</summary>
-    public static IConfiguration LoadConfig() =>
+    /// <param name="overrides">Applied last, e.g. an eval model preset.</param>
+    public static IConfiguration LoadConfig(IEnumerable<KeyValuePair<string, string?>>? overrides = null) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(Defaults)
             .AddJsonFile(Path.GetFullPath("appsettings.Local.json"), optional: true)
             .AddEnvironmentVariables()
+            .AddInMemoryCollection(overrides ?? [])
             .Build();
 
     /// <summary>Any OpenAI-compatible endpoint: OpenAI, Azure OpenAI, or Ollama / vLLM on-prem.</summary>

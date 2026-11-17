@@ -9,13 +9,15 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 
 // Usage (from the repo root):
-//   dotnet run --project src/ErpAgent.Evals -- [--runs 3] [--only happy-path] [--pause 5]
+//   dotnet run --project src/ErpAgent.Evals -- [--preset gemini-flash] [--runs 3] [--only happy-path] [--pause 5]
+// --preset picks endpoint, model and pause from evals/models.json (the API key still comes from your config/env).
 // --pause waits N seconds between runs, which helps with free-tier rate limits.
 Console.OutputEncoding = Encoding.UTF8;
 
 var runs = 1;
-var pause = TimeSpan.Zero;
+TimeSpan? pauseArg = null;
 string? only = null;
+string? preset = null;
 var scenarioFile = Path.GetFullPath("evals/scenarios.json");
 for (var i = 0; i < args.Length; i++)
 {
@@ -23,12 +25,29 @@ for (var i = 0; i < args.Length; i++)
     {
         case "--runs": runs = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
         case "--only": only = args[++i]; break;
-        case "--pause": pause = TimeSpan.FromSeconds(int.Parse(args[++i], CultureInfo.InvariantCulture)); break;
+        case "--pause": pauseArg = TimeSpan.FromSeconds(int.Parse(args[++i], CultureInfo.InvariantCulture)); break;
+        case "--preset": preset = args[++i]; break;
         case "--scenarios": scenarioFile = Path.GetFullPath(args[++i]); break;
     }
 }
 
-var config = Hosting.LoadConfig();
+var overrides = new Dictionary<string, string?>();
+var pause = pauseArg ?? TimeSpan.Zero;
+if (preset is not null)
+{
+    var presets = JsonSerializer.Deserialize<Dictionary<string, ModelPreset>>(
+        File.ReadAllText(Path.GetFullPath("evals/models.json")), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    if (!presets.TryGetValue(preset, out var p))
+    {
+        Console.Error.WriteLine($"Unknown preset '{preset}'. Known: {string.Join(", ", presets.Keys)}");
+        return 2;
+    }
+    overrides["Llm:Endpoint"] = p.Endpoint;
+    overrides["Llm:Model"] = p.Model;
+    pause = pauseArg ?? TimeSpan.FromSeconds(p.PauseSeconds);
+}
+
+var config = Hosting.LoadConfig(overrides);
 IChatClient chat;
 try
 {
@@ -221,6 +240,8 @@ static string WriteReport(string model, int runs, List<ScenarioResult> results)
 }
 
 internal enum Outcome { Pass, Fail, Error }
+
+internal sealed record ModelPreset(string Label, string Endpoint, string Model, string ApiKeySecret, int PauseSeconds);
 
 internal sealed class ScenarioResult(Scenario scenario)
 {

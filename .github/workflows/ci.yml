@@ -68,7 +68,7 @@ jobs:
           done
           rm -f $out/*.pdb
           cp appsettings.example.json $out/
-          mkdir -p $out/evals && cp evals/scenarios.json $out/evals/
+          mkdir -p $out/evals && cp evals/scenarios.json evals/models.json $out/evals/
       - uses: actions/upload-artifact@v4
         with:
           name: guarded-erp-agent-${{ matrix.rid }}

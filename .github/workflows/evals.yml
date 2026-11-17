@@ -1,28 +1,58 @@
 name: evals
 
-# Manual only. Needs the LLM_API_KEY repository secret. Works with any OpenAI-compatible endpoint:
-#   OpenAI   https://api.openai.com/v1                                  (paid)
-#   Gemini   https://generativelanguage.googleapis.com/v1beta/openai/   (free tier)
+# Manual. Pick a preset from evals/models.json, or "all" to compare every model side by side.
+# Each preset names the repository secret that holds its API key (e.g. GEMINI_API_KEY).
+# To add a model: add it to evals/models.json and to the options list below.
 on:
   workflow_dispatch:
     inputs:
-      endpoint:
-        description: OpenAI-compatible endpoint
-        default: https://api.openai.com/v1
-      model:
-        description: Model name
-        default: gpt-5-mini
+      preset:
+        description: Model preset (see evals/models.json)
+        type: choice
+        default: gemini-flash
+        options:
+          - gemini-flash
+          - gemini-flash-lite
+          - openai-gpt-5-mini
+          - claude-haiku
+          - all
       runs:
         description: Runs per scenario
-        default: "3"
-      pause:
-        description: Seconds to wait between runs (helps with free-tier rate limits)
-        default: "0"
+        default: "1"
 
 jobs:
-  evals:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        env:
+          PRESET: ${{ inputs.preset }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          presets = json.load(open("evals/models.json"))
+          choice = os.environ["PRESET"]
+          if choice != "all" and choice not in presets:
+              print(f"::error::Preset '{choice}' is not in evals/models.json")
+              raise SystemExit(1)
+          picked = [dict(id=key, **value) for key, value in presets.items() if choice in ("all", key)]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("matrix=" + json.dumps(picked) + "\n")
+          PY
+
+  evals:
+    needs: plan
+    name: evals (${{ matrix.id }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -31,18 +61,24 @@ jobs:
       - run: dotnet build GuardedErp.slnx
       - name: Run evals
         env:
-          Llm__ApiKey: ${{ secrets.LLM_API_KEY }}
-          Llm__Endpoint: ${{ inputs.endpoint }}
-          Llm__Model: ${{ inputs.model }}
+          Llm__ApiKey: ${{ secrets[matrix.apiKeySecret] }}
+          Llm__Endpoint: ${{ matrix.endpoint }}
+          Llm__Model: ${{ matrix.model }}
+          KEY_NAME: ${{ matrix.apiKeySecret }}
           RUNS: ${{ inputs.runs }}
-          PAUSE: ${{ inputs.pause }}
-        run: dotnet run --project src/ErpAgent.Evals --no-build -- --runs "$RUNS" --pause "$PAUSE"
+          PAUSE: ${{ matrix.pauseSeconds }}
+        run: |
+          if [ -z "$Llm__ApiKey" ]; then
+            echo "::error::Repository secret $KEY_NAME is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          dotnet run --project src/ErpAgent.Evals --no-build -- --runs "$RUNS" --pause "$PAUSE"
       - name: Publish report to the run summary
         if: always()
         run: cat evals/results/*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No report written." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: eval-report
+          name: eval-report-${{ matrix.id }}
           path: evals/results/
           if-no-files-found: ignore
