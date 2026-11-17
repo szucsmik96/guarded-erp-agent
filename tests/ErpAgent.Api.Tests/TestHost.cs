@@ -121,9 +121,19 @@ public static class ApiCalls
         }
 
         using var response = await client.SendAsync(request);
-        Assert.Equal(System.Net.HttpStatusCode.Accepted, response.StatusCode);
+        await ExpectStatusAsync(response, System.Net.HttpStatusCode.Accepted);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return body.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Like Assert.Equal on the status code, but shows the response body (the exception page in Development).</summary>
+    public static async Task ExpectStatusAsync(HttpResponseMessage response, System.Net.HttpStatusCode expected)
+    {
+        if (response.StatusCode != expected)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Fail($"Expected {(int)expected}, got {(int)response.StatusCode}: {body[..Math.Min(body.Length, 1200)]}");
+        }
     }
 
     public static async Task<JsonElement> WaitForStatusAsync(HttpClient client, Guid runId, string status)

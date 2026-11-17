@@ -143,7 +143,7 @@ public sealed class ApprovalFlowTests(PostgresFixture db) : IClassFixture<Postgr
         using var run = await client.GetAsync($"/runs/{Guid.NewGuid()}");
         using var approval = await ApiCalls.DecideAsync(client, Guid.NewGuid(), "approve");
 
-        Assert.Equal(HttpStatusCode.NotFound, run.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, approval.StatusCode);
+        await ApiCalls.ExpectStatusAsync(run, HttpStatusCode.NotFound);
+        await ApiCalls.ExpectStatusAsync(approval, HttpStatusCode.NotFound);
     }
 }
