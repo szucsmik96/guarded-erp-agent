@@ -187,9 +187,9 @@ static string WriteReport(string model, int runs, List<ScenarioResult> results)
     var sb = new StringBuilder();
     sb.AppendLine(CultureInfo.InvariantCulture, $"# Eval run: {model}");
     sb.AppendLine();
+    var errorNote = errors > 0 ? $" · {errors} run(s) not graded (provider errors)" : "";
     sb.AppendLine(CultureInfo.InvariantCulture,
-        $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm} · {runs} run(s) per scenario · **{passed}/{graded} passed**" +
-        (errors > 0 ? $" · {errors} run(s) not graded (provider errors)" : ""));
+        $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm} · {runs} run(s) per scenario · **{passed}/{graded} passed**{errorNote}");
     sb.AppendLine();
     sb.AppendLine("| Scenario | Passed | Provider errors | Time | First problem |");
     sb.AppendLine("|---|---|---|---|---|");
