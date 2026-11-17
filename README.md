@@ -184,3 +184,7 @@ tests/ErpAgent.Core.Tests  Agent tests with a scripted fake model (no LLM, runs 
       such as splitting an order when stock is short
 - [ ] **M5: ops.** OpenTelemetry traces across agent → MCP → DB, Docker Compose, and a small web UI
       for approvals
+
+## License
+
+[MIT](LICENSE) © 2026 Miklós Szűcs
