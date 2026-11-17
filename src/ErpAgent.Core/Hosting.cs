@@ -53,6 +53,11 @@ public static class Hosting
             NetworkTimeout = TimeSpan.FromSeconds(int.Parse(config["Llm:TimeoutSeconds"]!, CultureInfo.InvariantCulture)),
         };
 
+        if (GeminiThoughtSignaturePolicy.AppliesTo(options.Endpoint))
+        {
+            options.AddPolicy(new GeminiThoughtSignaturePolicy(), PipelinePosition.PerCall);
+        }
+
         return new OpenAIClient(new ApiKeyCredential(apiKey), options)
             .GetChatClient(config["Llm:Model"]!)
             .AsIChatClient();
