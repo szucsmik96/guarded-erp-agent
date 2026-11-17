@@ -57,6 +57,42 @@ check, the approval and the audit in one readable place
 ([`GuardedAgent.cs`](src/ErpAgent.Core/GuardedAgent.cs)). It's tested with a scripted fake model,
 so CI proves on every push, without an LLM, that denied writes never run and unannotated tools need approval.
 
+## Agent API: durable runs and approvals over HTTP
+
+`ErpAgent.Api` turns the agent into a backend service. In a real company the approval arrives minutes
+or hours later, from a different person, possibly after a deploy. So a run **pauses** instead of
+blocking, its full state is stored in Postgres, and it **resumes** when someone decides.
+
+```
+POST /runs                      { "message": "Order 4 standing desks for Nordic Furnishings" }  → 202 { id }
+GET  /runs/{id}                 status, answer, tool calls, pending approvals
+GET  /runs/{id}/events          Server-Sent Events: tool.call, approval.requested, approval.decided, run.completed
+GET  /approvals?status=pending
+POST /approvals/{id}/approve    { "reason": "ok" }      (send an Idempotency-Key header to make retries safe)
+POST /approvals/{id}/reject     { "reason": "over budget" }
+POST /runs/{id}/messages        follow-up message once a turn has finished
+GET  /openapi/v1.json
+```
+
+What makes it production-shaped:
+
+- **Resumable engine.** [`AgentEngine`](src/ErpAgent.Core/AgentEngine.cs) is the agent loop as a state
+  machine. It runs until done, failed or "needs a human", and the whole conversation serializes to JSON.
+- **Survives restarts.** A background worker advances runs and, on startup, picks up any that were
+  mid-flight. A run waiting for approval just waits, in the database.
+- **Exactly-once writes.** Each tool call gets a stable `requestId`. If the process dies after the
+  ERP write but before saving, the retry is recognised and returns the existing order.
+- **Idempotent API.** `Idempotency-Key` on POSTs. A retry replays the stored response, while the
+  same key with a different body gets 422. Approving twice is a no-op, and approving after a
+  rejection gets 409.
+- **Transactional decisions.** Approval row and run are locked, updated and logged in one
+  transaction. Worker saves use optimistic concurrency (a version column).
+- **Versioned SQL migrations** under a Postgres advisory lock, so parallel starts are safe.
+- **Integration tests against real Postgres** ([Testcontainers](https://testcontainers.com)). They
+  cover approve and reject, idempotency, and approving a run *after the API was restarted*.
+
+In compose, `agent-api` runs on port 8081 next to Postgres, the MCP server (over HTTP) and Ollama.
+
 ## Local tool policy
 
 Server annotations are hints. That's fine for a server you own, but an operator connecting to a
@@ -203,12 +239,14 @@ claude mcp add --transport http erp http://localhost:8080/mcp --header "Authoriz
 ```
 src/ErpMcp.Server/         MCP server (stdio or HTTP): tools, business rules, SQLite schema + seed, Dockerfile
 src/ErpAgent.Core/         Agent: tool loop, fail-closed policy, approval gate, audit log, hosting
+src/ErpAgent.Api/          Agent API: durable runs, approvals, SSE, Postgres, Dockerfile
 src/ErpAgent.Cli/          Interactive console with human approval, Dockerfile
 compose.yaml               Offline stack: MCP server + Ollama + agent
 src/ErpAgent.Evals/        Scenario runner + grader against a real model
 evals/scenarios.json       Eval scenarios
 tests/ErpMcp.Server.Tests  Business-rule tests (stock, credit, merging, rejected writes)
-tests/ErpAgent.Core.Tests  Agent tests with a scripted fake model (no LLM, runs in CI) + grader tests
+tests/ErpAgent.Core.Tests  Engine and agent tests with a scripted fake model (no LLM, runs in CI) + grader tests
+tests/ErpAgent.Api.Tests   API integration tests against real Postgres (Testcontainers)
 ```
 
 ## Roadmap
@@ -222,7 +260,12 @@ tests/ErpAgent.Core.Tests  Agent tests with a scripted fake model (no LLM, runs 
       Dockerfiles, a Compose stack with Ollama, and a CI image build with an auth smoke test
 - [x] **M3b: local tool policy.** Deny / require-approval / auto-approve rules with wildcards, and an
       option to stop trusting server annotations
-- [ ] **M3c: identity.** OAuth and per-user identity in the audit trail
+- [x] **M4a: Agent API.** Durable runs, approvals over HTTP, SSE events, idempotency, exactly-once writes,
+      Postgres integration tests
+- [ ] **M4b: identity and tenants.** OAuth (Keycloak), who-asked / who-approved in the audit trail, no
+      self-approval, per-tenant ERP connection and policy
+- [ ] **M4c: observability.** OpenTelemetry traces API → agent → LLM → MCP → DB, and a thin web UI
+- [ ] **Scale-out.** Lease-based run claiming so several API instances can share the work
 - [ ] **M4: richer MCP.** Resources (item master, price lists), prompts, and multi-step planning
       such as splitting an order when stock is short
 - [ ] **M5: ops.** OpenTelemetry traces across agent → MCP → DB, Docker Compose, and a small web UI

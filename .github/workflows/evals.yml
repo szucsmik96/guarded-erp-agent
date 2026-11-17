@@ -15,6 +15,9 @@ on:
       runs:
         description: Runs per scenario
         default: "3"
+      pause:
+        description: Seconds to wait between runs (helps with free-tier rate limits)
+        default: "0"
 
 jobs:
   evals:
@@ -32,7 +35,8 @@ jobs:
           Llm__Endpoint: ${{ inputs.endpoint }}
           Llm__Model: ${{ inputs.model }}
           RUNS: ${{ inputs.runs }}
-        run: dotnet run --project src/ErpAgent.Evals --no-build -- --runs "$RUNS"
+          PAUSE: ${{ inputs.pause }}
+        run: dotnet run --project src/ErpAgent.Evals --no-build -- --runs "$RUNS" --pause "$PAUSE"
       - name: Publish report to the run summary
         if: always()
         run: cat evals/results/*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No report written." >> "$GITHUB_STEP_SUMMARY"

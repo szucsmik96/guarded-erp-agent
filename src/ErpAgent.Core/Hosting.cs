@@ -1,4 +1,6 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Client;
@@ -16,6 +18,8 @@ public static class Hosting
     {
         ["Llm:Endpoint"] = "https://api.openai.com/v1",
         ["Llm:Model"] = "gpt-5-mini",
+        ["Llm:MaxRetries"] = "6",
+        ["Llm:TimeoutSeconds"] = "180",
         ["Mcp:ServerProject"] = DefaultServerProject,
         ["Agent:MaxSteps"] = "12",
         ["Agent:AuditFile"] = "agent-audit.jsonl",
@@ -40,9 +44,16 @@ public static class Hosting
                 "For a local Ollama endpoint any non-empty value works.");
         }
 
-        return new OpenAIClient(
-                new ApiKeyCredential(apiKey),
-                new OpenAIClientOptions { Endpoint = new Uri(config["Llm:Endpoint"]!) })
+        var options = new OpenAIClientOptions
+        {
+            Endpoint = new Uri(config["Llm:Endpoint"]!),
+
+            // Retries 429 and 5xx with exponential backoff, honouring Retry-After. Free tiers need this.
+            RetryPolicy = new ClientRetryPolicy(maxRetries: int.Parse(config["Llm:MaxRetries"]!, CultureInfo.InvariantCulture)),
+            NetworkTimeout = TimeSpan.FromSeconds(int.Parse(config["Llm:TimeoutSeconds"]!, CultureInfo.InvariantCulture)),
+        };
+
+        return new OpenAIClient(new ApiKeyCredential(apiKey), options)
             .GetChatClient(config["Llm:Model"]!)
             .AsIChatClient();
     }
