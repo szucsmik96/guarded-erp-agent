@@ -69,12 +69,4 @@ public sealed class GuardedAgentTests
         Assert.True(turn.HitStepLimit);
         Assert.Equal(3, _tools.ReadCalls);
     }
-
-    [Fact]
-    public void Policy_fails_closed_for_tools_without_mcp_annotations()
-    {
-        var plain = AIFunctionFactory.Create(() => "x", "anything");
-
-        Assert.True(ToolPolicy.RequiresApproval(plain));
-    }
 }

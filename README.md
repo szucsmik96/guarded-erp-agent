@@ -1,5 +1,8 @@
 # Guarded ERP Agent
 
+[![ci](https://github.com/szucsmik96/guarded-erp-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/szucsmik96/guarded-erp-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An AI agent that can **read and write a business system safely**. It's built in .NET on the
 [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -26,7 +29,7 @@ flowchart LR
     U[User / eval runner] <--> A
 
     subgraph A[ErpAgent.Core]
-        L[Tool loop] --> P{ToolPolicy<br/>read-only?}
+        L[Tool loop] --> P{ToolPolicy<br/>local rules +<br/>server annotations}
         P -- yes --> X[Invoke]
         P -- no --> G[Approval gate] -- approved --> X
         X --> J[(agent-audit.jsonl)]
@@ -53,6 +56,34 @@ The agent uses its own tool loop rather than `UseFunctionInvocation()`. That kee
 check, the approval and the audit in one readable place
 ([`GuardedAgent.cs`](src/ErpAgent.Core/GuardedAgent.cs)). It's tested with a scripted fake model,
 so CI proves on every push, without an LLM, that denied writes never run and unannotated tools need approval.
+
+## Local tool policy
+
+Server annotations are hints. That's fine for a server you own, but an operator connecting to a
+**third-party** MCP server shouldn't have to trust its labels. The `ToolPolicy` section in
+`appsettings.Local.json` is the local override:
+
+```json
+"ToolPolicy": {
+  "TrustServerAnnotations": false,
+  "AutoApprove": ["search_*", "find_customers"],
+  "RequireApproval": ["validate_sales_order"],
+  "Deny": ["create_*"]
+}
+```
+
+| Rule | Effect |
+|---|---|
+| `Deny` | Hidden from the model and never executed |
+| `RequireApproval` | Always asks, even if the server says read-only |
+| `AutoApprove` | Runs without asking |
+| `TrustServerAnnotations` | If `true` (default), tools the server marks read-only run without asking. If `false`, only `AutoApprove` entries do |
+
+Precedence: **Deny > RequireApproval > AutoApprove > server annotation > approval**. Entries are exact
+tool names or prefixes ending in `*`. Anything not explicitly allowed needs a human. At startup the
+CLI prints each tool's decision, and warns about risky or dead entries, such as an auto-approved
+tool the server doesn't mark read-only. The evals always use the default policy, so their results
+don't depend on local settings.
 
 ## Run it
 
@@ -178,8 +209,9 @@ tests/ErpAgent.Core.Tests  Agent tests with a scripted fake model (no LLM, runs 
       results table in this README
 - [x] **M3a: remote and containerised.** Streamable HTTP transport, API-key auth (fail closed),
       Dockerfiles, a Compose stack with Ollama, and a CI image build with an auth smoke test
-- [ ] **M3b: identity.** OAuth, per-user identity in the audit trail, and a local allow/deny list so
-      third-party servers' annotations aren't trusted blindly
+- [x] **M3b: local tool policy.** Deny / require-approval / auto-approve rules with wildcards, and an
+      option to stop trusting server annotations
+- [ ] **M3c: identity.** OAuth and per-user identity in the audit trail
 - [ ] **M4: richer MCP.** Resources (item master, price lists), prompts, and multi-step planning
       such as splitting an order when stock is short
 - [ ] **M5: ops.** OpenTelemetry traces across agent → MCP → DB, Docker Compose, and a small web UI

@@ -86,7 +86,8 @@ async Task<List<string>> RunOnceAsync(Scenario scenario)
         var tools = (await mcp.ListToolsAsync()).Cast<AIFunction>().ToList();
 
         var gate = new ScriptedApprovalGate(scenario.Approve);
-        var agent = new GuardedAgent(chat, tools, ToolPolicy.RequiresApproval, gate, maxSteps: 12);
+        // Default policy on purpose: eval results must not depend on a local ToolPolicy override.
+        var agent = new GuardedAgent(chat, tools, ToolPolicy.Default.RequiresApproval, gate, maxSteps: 12);
 
         var ordersBefore = CountOrders(dbPath);
         var turn = await agent.RunTurnAsync(scenario.Prompt);
