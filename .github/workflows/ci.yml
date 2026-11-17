@@ -1,0 +1,59 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore GuardedErp.slnx
+      - run: dotnet build GuardedErp.slnx --no-restore -c Release
+      - run: dotnet test GuardedErp.slnx --no-build -c Release
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f src/ErpMcp.Server/Dockerfile -t erp-mcp .
+      - run: docker build -f src/ErpAgent.Cli/Dockerfile -t erp-agent .
+      - name: Smoke test (health, auth rejects missing key, server refuses to start without a key)
+        run: |
+          docker run -d --name erp -p 8080:8080 -e MCP_API_KEY=ci-key erp-mcp
+          for i in $(seq 1 30); do curl -fs localhost:8080/healthz && break; sleep 1; done
+          curl -fs localhost:8080/healthz
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/mcp)
+          test "$code" = "401" || { echo "expected 401 without key, got $code"; docker logs erp; exit 1; }
+          if docker run --rm erp-mcp; then echo "server started without MCP_API_KEY"; exit 1; fi
+
+  # Self-contained, single-file executables: run without installing .NET.
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        rid: [win-x64, osx-arm64, linux-x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish
+        run: |
+          out=out/guarded-erp-agent-${{ matrix.rid }}
+          for p in ErpMcp.Server ErpAgent.Cli ErpAgent.Evals; do
+            dotnet publish src/$p/$p.csproj -c Release -r ${{ matrix.rid }} --self-contained \
+              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $out
+          done
+          rm -f $out/*.pdb
+          cp appsettings.example.json $out/
+          mkdir -p $out/evals && cp evals/scenarios.json $out/evals/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guarded-erp-agent-${{ matrix.rid }}
+          path: out/guarded-erp-agent-${{ matrix.rid }}

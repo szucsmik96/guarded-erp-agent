@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/*.db
+**/*.db-*
+.git/
+.github/
+.vs/
+.idea/
+evals/results/
+agent-audit.jsonl
+appsettings.Local.json
+.env

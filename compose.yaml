@@ -1,0 +1,60 @@
+# Fully local, offline stack: ERP MCP server + Ollama. No API keys leave the machine.
+#   docker compose up -d            # server + model (first start pulls the model)
+#   docker compose run --rm agent   # interactive agent with approval prompts
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]        # also lets host-side evals use the local model
+    volumes: [ollama:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # NVIDIA GPU (optional, much faster):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama: { condition: service_healthy }
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${OLLAMA_MODEL:-qwen3:8b}"]
+    restart: "no"
+
+  erp-mcp:
+    build:
+      context: .
+      dockerfile: src/ErpMcp.Server/Dockerfile
+    ports: ["8080:8080"]
+    environment:
+      MCP_API_KEY: ${MCP_API_KEY:?set MCP_API_KEY in .env}
+    volumes: [erp-data:/data]
+
+  agent:
+    build:
+      context: .
+      dockerfile: src/ErpAgent.Cli/Dockerfile
+    profiles: ["agent"]           # not started by `up`; use `docker compose run --rm agent`
+    stdin_open: true
+    tty: true
+    depends_on:
+      erp-mcp: { condition: service_healthy }
+      ollama-pull: { condition: service_completed_successfully }
+    environment:
+      Llm__Endpoint: http://ollama:11434/v1
+      Llm__ApiKey: ollama
+      Llm__Model: ${OLLAMA_MODEL:-qwen3:8b}
+      Mcp__Url: http://erp-mcp:8080/mcp
+      Mcp__ApiKey: ${MCP_API_KEY}
+    volumes: [agent-audit:/audit]
+
+volumes:
+  ollama:
+  erp-data:
+  agent-audit:
