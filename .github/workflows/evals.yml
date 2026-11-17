@@ -1,9 +1,14 @@
 name: evals
 
-# Manual only: needs the OPENAI_API_KEY repository secret and costs a few cents per run.
+# Manual only. Needs the LLM_API_KEY repository secret. Works with any OpenAI-compatible endpoint:
+#   OpenAI   https://api.openai.com/v1                                  (paid)
+#   Gemini   https://generativelanguage.googleapis.com/v1beta/openai/   (free tier)
 on:
   workflow_dispatch:
     inputs:
+      endpoint:
+        description: OpenAI-compatible endpoint
+        default: https://api.openai.com/v1
       model:
         description: Model name
         default: gpt-5-mini
@@ -22,7 +27,8 @@ jobs:
       - run: dotnet build GuardedErp.slnx
       - name: Run evals
         env:
-          Llm__ApiKey: ${{ secrets.OPENAI_API_KEY }}
+          Llm__ApiKey: ${{ secrets.LLM_API_KEY }}
+          Llm__Endpoint: ${{ inputs.endpoint }}
           Llm__Model: ${{ inputs.model }}
           RUNS: ${{ inputs.runs }}
         run: dotnet run --project src/ErpAgent.Evals --no-build -- --runs "$RUNS"
