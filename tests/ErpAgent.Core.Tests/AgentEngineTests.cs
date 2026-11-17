@@ -45,6 +45,31 @@ public sealed class AgentEngineTests
     }
 
     [Fact]
+    public async Task State_still_deserializes_when_a_database_reorders_json_keys()
+    {
+        var state = AgentRunState.Create("system");
+        state.AddUserMessage("order it");
+        await Engine(new ScriptedChatClient(Call("create_order"))).AdvanceAsync(state);
+
+        // Postgres jsonb sorts keys, which can move "$type" away from the front of each object.
+        var reordered = SortKeys(System.Text.Json.Nodes.JsonNode.Parse(AgentStateSerializer.Serialize(state))!).ToJsonString();
+        var restored = AgentStateSerializer.Deserialize(reordered);
+
+        Assert.Equal(RunStatus.AwaitingApproval, restored.Status);
+        Assert.Contains(restored.Messages.SelectMany(m => m.Contents), c => c is FunctionCallContent);
+    }
+
+    private static System.Text.Json.Nodes.JsonNode SortKeys(System.Text.Json.Nodes.JsonNode node) => node switch
+    {
+        System.Text.Json.Nodes.JsonObject obj => new System.Text.Json.Nodes.JsonObject(
+            obj.OrderBy(p => p.Key.StartsWith('$') ? 1 : 0).ThenBy(p => p.Key)  // metadata keys like "$type" go last
+               .Select(p => KeyValuePair.Create(p.Key, p.Value is null ? null : SortKeys(p.Value.DeepClone())))),
+        System.Text.Json.Nodes.JsonArray arr => new System.Text.Json.Nodes.JsonArray(
+            arr.Select(v => v is null ? null : SortKeys(v.DeepClone())).ToArray()),
+        _ => node.DeepClone(),
+    };
+
+    [Fact]
     public async Task Rejected_call_is_reported_to_the_model_and_never_executed()
     {
         var state = AgentRunState.Create("system");

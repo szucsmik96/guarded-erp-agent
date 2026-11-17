@@ -125,6 +125,9 @@ public static class AgentStateSerializer
         {
             TypeInfoResolver = JsonTypeInfoResolver.Combine(
                 AIJsonUtilities.DefaultOptions.TypeInfoResolver, new DefaultJsonTypeInfoResolver()),
+
+            // Postgres jsonb does not keep key order, so "$type" may no longer be the first property.
+            AllowOutOfOrderMetadataProperties = true,
         };
         options.Converters.Add(new JsonStringEnumConverter());
         options.MakeReadOnly();

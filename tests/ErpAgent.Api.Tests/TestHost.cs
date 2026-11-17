@@ -142,7 +142,9 @@ public static class ApiCalls
         JsonElement run = default;
         while (DateTime.UtcNow < deadline)
         {
-            run = await client.GetFromJsonAsync<JsonElement>($"/runs/{runId}");
+            using var response = await client.GetAsync($"/runs/{runId}");
+            await ExpectStatusAsync(response, System.Net.HttpStatusCode.OK);
+            run = await response.Content.ReadFromJsonAsync<JsonElement>();
             if (run.GetProperty("status").GetString() == status)
             {
                 return run;
