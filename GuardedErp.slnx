@@ -4,9 +4,11 @@
     <Project Path="src/ErpAgent.Core/ErpAgent.Core.csproj" />
     <Project Path="src/ErpAgent.Cli/ErpAgent.Cli.csproj" />
     <Project Path="src/ErpAgent.Evals/ErpAgent.Evals.csproj" />
+    <Project Path="src/ErpAgent.Api/ErpAgent.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ErpMcp.Server.Tests/ErpMcp.Server.Tests.csproj" />
     <Project Path="tests/ErpAgent.Core.Tests/ErpAgent.Core.Tests.csproj" />
+    <Project Path="tests/ErpAgent.Api.Tests/ErpAgent.Api.Tests.csproj" />
   </Folder>
 </Solution>

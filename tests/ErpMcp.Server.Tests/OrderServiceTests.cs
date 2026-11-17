@@ -88,6 +88,21 @@ public sealed class OrderServiceTests : IDisposable
         Assert.Equal(1, Count("SELECT COUNT(*) FROM AuditLog WHERE Action = 'create_sales_order.rejected'"));
     }
 
+    [Fact]
+    public void Same_request_id_creates_the_order_once()
+    {
+        var ordersBefore = Count("SELECT COUNT(*) FROM Orders");
+
+        var first = _orders.Create("C40000", [new("A00002", 1)], requestId: "run-1:call-1");
+        var retry = _orders.Create("C40000", [new("A00002", 1)], requestId: "run-1:call-1");
+
+        Assert.True(first.Created);
+        Assert.False(first.Replayed);
+        Assert.True(retry.Replayed);
+        Assert.Equal(first.DocNum, retry.DocNum);
+        Assert.Equal(ordersBefore + 1, Count("SELECT COUNT(*) FROM Orders"));
+    }
+
     private int Committed(string itemCode)
     {
         using var c = _db.Open();

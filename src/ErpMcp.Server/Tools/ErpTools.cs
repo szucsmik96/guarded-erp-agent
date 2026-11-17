@@ -124,9 +124,11 @@ public static class ErpTools
     public static string CreateSalesOrder(
         OrderService orders,
         [Description("Exact customer code, e.g. C40000.")] string cardCode,
-        [Description("Order lines.")] OrderLineInput[] lines)
+        [Description("Order lines.")] OrderLineInput[] lines,
+        [Description("Idempotency key. Leave empty: the agent host fills it in. A repeated key returns the existing order.")]
+        string? requestId = null)
     {
-        var result = orders.Create(cardCode, lines);
+        var result = orders.Create(cardCode, lines, requestId);
         return JsonSerializer.Serialize(result, Json);
     }
 }

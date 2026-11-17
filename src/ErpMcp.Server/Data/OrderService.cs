@@ -25,7 +25,8 @@ public sealed record OrderCheck(
     CreditSummary? Credit,
     IReadOnlyList<OrderIssue> Issues);
 
-public sealed record OrderResult(bool Created, long? DocNum, OrderCheck Check);
+/// <summary>Replayed = true when the requestId was seen before and the existing order is returned.</summary>
+public sealed record OrderResult(bool Created, long? DocNum, OrderCheck Check, bool Replayed = false);
 
 /// <summary>
 /// Business rules live on the server, not in the prompt. The model can be wrong or manipulated;
@@ -39,10 +40,23 @@ public sealed class OrderService(ErpDb db)
         return Check(c, null, cardCode, lines);
     }
 
-    public OrderResult Create(string cardCode, IReadOnlyList<OrderLineInput> lines)
+    public OrderResult Create(string cardCode, IReadOnlyList<OrderLineInput> lines, string? requestId = null)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
+
+        // Idempotency: the same requestId always maps to the same order, so a retried call is applied once.
+        if (!string.IsNullOrWhiteSpace(requestId))
+        {
+            var existing = Sql.Scalar(c, tx, "SELECT DocNum FROM Orders WHERE RequestId = $rid", new { rid = requestId });
+            if (existing is not null)
+            {
+                var existingDoc = Convert.ToInt64(existing);
+                var summary = LoadOrder(c, tx, existingDoc);
+                tx.Commit();
+                return new OrderResult(true, existingDoc, summary, Replayed: true);
+            }
+        }
 
         // Re-validate inside the transaction: stock or credit may have changed since validate_sales_order ran.
         var check = Check(c, tx, cardCode, lines);
@@ -54,8 +68,8 @@ public sealed class OrderService(ErpDb db)
         }
 
         Sql.Execute(c, tx,
-            "INSERT INTO Orders (CardCode, Status, DocTotal, CreatedAt) VALUES ($card, 'Open', $total, $at)",
-            new { card = check.CardCode, total = check.DocTotal, at = DateTime.UtcNow.ToString("O") });
+            "INSERT INTO Orders (CardCode, Status, DocTotal, CreatedAt, RequestId) VALUES ($card, 'Open', $total, $at, $rid)",
+            new { card = check.CardCode, total = check.DocTotal, at = DateTime.UtcNow.ToString("O"), rid = string.IsNullOrWhiteSpace(requestId) ? null : requestId });
         var docNum = Convert.ToInt64(Sql.Scalar(c, tx, "SELECT last_insert_rowid()"));
 
         var lineNum = 0;
@@ -69,9 +83,25 @@ public sealed class OrderService(ErpDb db)
                 new { qty = line.Quantity, item = line.ItemCode });
         }
 
-        Audit(c, tx, "create_sales_order.created", new { docNum, check.CardCode, check.DocTotal, check.Lines });
+        Audit(c, tx, "create_sales_order.created", new { docNum, requestId, check.CardCode, check.DocTotal, check.Lines });
         tx.Commit();
         return new OrderResult(true, docNum, check);
+    }
+
+    private static OrderCheck LoadOrder(SqliteConnection c, SqliteTransaction tx, long docNum)
+    {
+        var card = Sql.Query(c, tx,
+            "SELECT o.CardCode, cu.CardName FROM Orders o JOIN Customers cu ON cu.CardCode = o.CardCode WHERE o.DocNum = $doc",
+            r => (Code: r.GetString(0), Name: r.GetString(1)), new { doc = docNum }).Single();
+        var lines = Sql.Query(c, tx,
+            """
+            SELECT l.ItemCode, i.ItemName, l.Quantity, i.OnHand - i.Committed, l.Price
+            FROM OrderLines l JOIN Items i ON i.ItemCode = l.ItemCode
+            WHERE l.DocNum = $doc ORDER BY l.LineNum
+            """,
+            r => new PricedLine(r.GetString(0), r.GetString(1), r.GetInt32(2), r.GetInt32(3), r.GetDecimal(4), r.GetDecimal(4) * r.GetInt32(2)),
+            new { doc = docNum });
+        return new OrderCheck(true, card.Code, card.Name, lines, lines.Sum(l => l.LineTotal), null, []);
     }
 
     internal static CreditSummary CreditFor(decimal limit, decimal balance, decimal openOrders) =>

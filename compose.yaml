@@ -36,6 +36,37 @@ services:
       MCP_API_KEY: ${MCP_API_KEY:?set MCP_API_KEY in .env}
     volumes: [erp-data:/data]
 
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent-dev-password}
+      POSTGRES_DB: agent
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Agent API: durable runs, approvals over HTTP, events over SSE.  http://localhost:8081/openapi/v1.json
+  agent-api:
+    build:
+      context: .
+      dockerfile: src/ErpAgent.Api/Dockerfile
+    ports: ["8081:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      erp-mcp: { condition: service_healthy }
+      ollama-pull: { condition: service_completed_successfully }
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Database=agent;Username=agent;Password=${POSTGRES_PASSWORD:-agent-dev-password}
+      Llm__Endpoint: http://ollama:11434/v1
+      Llm__ApiKey: ollama
+      Llm__Model: ${OLLAMA_MODEL:-qwen3:8b}
+      Mcp__Url: http://erp-mcp:8080/mcp
+      Mcp__ApiKey: ${MCP_API_KEY}
+
   agent:
     build:
       context: .
@@ -55,6 +86,7 @@ services:
     volumes: [agent-audit:/audit]
 
 volumes:
+  pg-data:
   ollama:
   erp-data:
   agent-audit:

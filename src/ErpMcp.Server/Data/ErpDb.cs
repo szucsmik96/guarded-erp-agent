@@ -57,6 +57,14 @@ public sealed class ErpDb(string connectionString)
     {
         using var c = Open();
         Sql.Execute(c, null, Schema);
+
+        // Additive migration for databases created before idempotent order creation existed.
+        var orderColumns = Sql.Query(c, null, "SELECT name FROM pragma_table_info('Orders')", r => r.GetString(0));
+        if (!orderColumns.Contains("RequestId"))
+        {
+            Sql.Execute(c, null, "ALTER TABLE Orders ADD COLUMN RequestId TEXT");
+        }
+        Sql.Execute(c, null, "CREATE UNIQUE INDEX IF NOT EXISTS IX_Orders_RequestId ON Orders(RequestId)");
         var items = Convert.ToInt64(Sql.Scalar(c, null, "SELECT COUNT(*) FROM Items"));
         if (items == 0)
         {

@@ -11,17 +11,20 @@ public static class Hosting
 {
     public const string DefaultServerProject = "src/ErpMcp.Server";
 
+    /// <summary>Built-in defaults; every other configuration source overrides them.</summary>
+    public static readonly IReadOnlyDictionary<string, string?> Defaults = new Dictionary<string, string?>
+    {
+        ["Llm:Endpoint"] = "https://api.openai.com/v1",
+        ["Llm:Model"] = "gpt-5-mini",
+        ["Mcp:ServerProject"] = DefaultServerProject,
+        ["Agent:MaxSteps"] = "12",
+        ["Agent:AuditFile"] = "agent-audit.jsonl",
+    };
+
     /// <summary>Defaults, then ./appsettings.Local.json (gitignored), then environment variables (Llm__ApiKey, ...).</summary>
     public static IConfiguration LoadConfig() =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Llm:Endpoint"] = "https://api.openai.com/v1",
-                ["Llm:Model"] = "gpt-5-mini",
-                ["Mcp:ServerProject"] = DefaultServerProject,
-                ["Agent:MaxSteps"] = "12",
-                ["Agent:AuditFile"] = "agent-audit.jsonl",
-            })
+            .AddInMemoryCollection(Defaults)
             .AddJsonFile(Path.GetFullPath("appsettings.Local.json"), optional: true)
             .AddEnvironmentVariables()
             .Build();

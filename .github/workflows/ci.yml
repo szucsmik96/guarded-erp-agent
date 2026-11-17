@@ -12,6 +12,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet restore GuardedErp.slnx
+      - name: Report resolved package versions (temporary, for pinning)
+        run: |
+          line=$(for p in src/*/*.csproj tests/*/*.csproj; do dotnet list "$p" package --format json; done \
+            | jq -rs '[.[].projects[].frameworks[]?.topLevelPackages[]? | "\(.id)=\(.resolvedVersion)"] | unique | join(" ")')
+          echo "::notice title=resolved::$line"
       - run: dotnet build GuardedErp.slnx --no-restore -c Release
       - run: dotnet test GuardedErp.slnx --no-build -c Release
 
@@ -22,6 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -f src/ErpMcp.Server/Dockerfile -t erp-mcp .
       - run: docker build -f src/ErpAgent.Cli/Dockerfile -t erp-agent .
+      - run: docker build -f src/ErpAgent.Api/Dockerfile -t erp-agent-api .
       - name: Smoke test (health, auth rejects missing key, server refuses to start without a key)
         run: |
           docker run -d --name erp -p 8080:8080 -e MCP_API_KEY=ci-key erp-mcp
